@@ -168,12 +168,11 @@ jobs:
       with:
         use-cross: ${{ matrix.job.use-cross }}
         command: build
-        args: --locked --target=${{ matrix.job.target }} --features hwcodec
-
-    - name: clean
-      shell: bash
-      run: |
-        cargo clean
+        args: --locked --target=${{ matrix.job.target }} --features hwcodec --release
+    # - name: clean
+    #   shell: bash
+    #   run: |
+    #     cargo clean
 
     # - name: Strip debug information from executable
     #   id: strip
@@ -210,6 +209,12 @@ jobs:
     #     # Let subsequent steps know where to find the (stripped) bin
     #     echo ::set-output name=BIN_PATH::${BIN_PATH}
     #     echo ::set-output name=BIN_NAME::${BIN_NAME}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: rustdesk-${{ matrix.job.target }}-release
+        path: target/${{ matrix.job.target }}/release/
 
     # - name: Set testing options
     #   id: test-options
