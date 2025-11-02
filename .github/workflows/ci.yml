@@ -66,7 +66,7 @@ jobs:
   #       args: --locked
 
   build:
-    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    name: ${{ matrix.job.target }}-${{ matrix.job.variant }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -78,7 +78,8 @@ jobs:
           # - { target: i686-pc-windows-msvc        , os: windows-2022                  }
           # - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
           # - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
-          - { target: x86_64-apple-darwin         , os: macos-13                      }
+          - { target: x86_64-apple-darwin         , os: macos-13, variant: sciter                      }
+          - { target: x86_64-apple-darwin         , os: macos-13, variant: flutter, flutter-version: "3.16.9"                      }
           # - { target: x86_64-pc-windows-gnu       , os: windows-2022                  }
           # - { target: x86_64-pc-windows-msvc      , os: windows-2022                  }
           # - { target: x86_64-unknown-linux-gnu    , os: ubuntu-22.04                  }
@@ -102,6 +103,9 @@ jobs:
         case ${{ matrix.job.target }} in
           x86_64-apple-darwin)
             brew install nasm create-dmg
+            if [ "${{ matrix.job.variant }}" = "flutter" ]; then
+              brew install cocoapods ninja cmake
+            fi
             ;;
           x86_64-unknown-linux-gnu)
             sudo apt-get -y update
@@ -133,6 +137,25 @@ jobs:
           # aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
         esac
 
+    - name: Setup Flutter
+      if: matrix.job.variant == 'flutter'
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ matrix.job.flutter-version }}
+        channel: stable
+        architecture: x64
+
+    - name: Prepare Flutter workspace
+      if: matrix.job.variant == 'flutter'
+      shell: bash
+      run: |
+        flutter --disable-analytics || true
+        dart --disable-analytics || true
+        flutter config --enable-macos-desktop
+        pushd flutter
+        flutter pub get
+        popd
+
     - name: Setup vcpkg with Github Actions binary cache
       uses: lukka/run-vcpkg@v11
       with:
@@ -156,6 +179,22 @@ jobs:
       run: |
         cargo install cargo-bundle --locked --force
 
+    - name: Install flutter_rust_bridge_codegen
+      if: matrix.job.variant == 'flutter'
+      shell: bash
+      run: |
+        cargo install flutter_rust_bridge_codegen --locked --force
+
+    - name: Generate Flutter bridge bindings
+      if: matrix.job.variant == 'flutter'
+      shell: bash
+      run: |
+        export PATH="$HOME/.cargo/bin:$PATH"
+        flutter_rust_bridge_codegen \
+          --rust-input ./src/flutter_ffi.rs \
+          --dart-output ./flutter/lib/generated_bridge.dart \
+          --c-output ./flutter/macos/Runner/bridge_generated.h
+
     - name: Show version information (Rust, cargo, GCC)
       shell: bash
       run: |
@@ -169,15 +208,44 @@ jobs:
     - uses: Swatinem/rust-cache@v2
 
     - name: Download Sciter runtime
+      if: matrix.job.variant == 'sciter'
       shell: bash
       run: |
         curl -L -o libsciter.dylib https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.osx/libsciter.dylib
         chmod 755 libsciter.dylib
 
-    - name: Build DMG
+    - name: Build application
       shell: bash
       run: |
-        python3 ./build.py --hwcodec
+        if [ "${{ matrix.job.variant }}" = "flutter" ]; then
+          python3 ./build.py --flutter --hwcodec
+        else
+          python3 ./build.py --hwcodec
+        fi
+
+    - name: Package Flutter DMG
+      if: matrix.job.variant == 'flutter'
+      shell: bash
+      run: |
+        VERSION=$(python3 - <<'PY'
+from pathlib import Path
+for line in Path("Cargo.toml").read_text().splitlines():
+    if line.startswith("version"):
+        print(line.split("=", 1)[1].strip().strip('"'))
+        break
+PY
+)
+        rm -f rustdesk-"${VERSION}".dmg
+        create-dmg --volname "RustDesk Installer" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app "rustdesk-${VERSION}.dmg" ./flutter/build/macos/Build/Products/Release/RustDesk.app
+
+    - name: Tag DMG with variant
+      shell: bash
+      run: |
+        shopt -s nullglob
+        for file in rustdesk-*.dmg; do
+          base="${file%.dmg}"
+          mv "$file" "${base}-${{ matrix.job.variant }}.dmg"
+        done
     # - name: clean
     #   shell: bash
     #   run: |
@@ -222,7 +290,7 @@ jobs:
     - name: Upload DMG artifact
       uses: actions/upload-artifact@v4
       with:
-        name: rustdesk-${{ matrix.job.target }}-dmg
+        name: rustdesk-${{ matrix.job.target }}-${{ matrix.job.variant }}-dmg
         path: rustdesk-*.dmg
 
     # - name: Set testing options
