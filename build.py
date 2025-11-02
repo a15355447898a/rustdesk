@@ -557,7 +557,10 @@ def main():
                 #     'mv target/release/bundle/deb/rustdesk*.deb ./flutter/rustdesk.deb')
                 build_flutter_deb(version, features)
         else:
-            system2('cargo bundle --release --features ' + features)
+            bundle_cmd = 'cargo bundle --release --bin rustdesk'
+            if features:
+                bundle_cmd += f' --features {features}'
+            system2(bundle_cmd)
             if osx:
                 bundle_dir = Path('target/release/bundle/osx/RustDesk.app/Contents/MacOS')
                 primary_bin = bundle_dir / 'rustdesk'
@@ -565,6 +568,7 @@ def main():
                 target_bin = primary_bin if primary_bin.exists() else alt_bin
                 if target_bin.exists():
                     system2(f'strip {target_bin}')
+                    system2(f'install_name_tool -change /usr/local/lib/libsciter.dylib @executable_path/libsciter.dylib {target_bin}')
                 else:
                     print(f'Warn: skip strip, binary not found in {bundle_dir}')
                 system2(f'cp libsciter.dylib {bundle_dir}/')
