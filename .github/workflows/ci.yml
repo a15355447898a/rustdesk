@@ -104,7 +104,10 @@ jobs:
           x86_64-apple-darwin)
             brew install nasm create-dmg
             if [ "${{ matrix.job.variant }}" = "flutter" ]; then
-              brew install cocoapods ninja cmake
+              if ! brew install cocoapods ninja cmake; then
+                brew link --overwrite --force cocoapods
+              fi
+              brew link --overwrite --force cocoapods
             fi
             ;;
           x86_64-unknown-linux-gnu)
@@ -183,7 +186,7 @@ jobs:
       if: matrix.job.variant == 'flutter'
       shell: bash
       run: |
-        cargo install flutter_rust_bridge_codegen --force
+        cargo install flutter_rust_bridge_codegen --version "1.80.1" --features "uuid" --force
 
     - name: Generate Flutter bridge bindings
       if: matrix.job.variant == 'flutter'
