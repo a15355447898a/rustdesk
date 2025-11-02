@@ -586,6 +586,9 @@ def main():
     codesign -s "Developer ID Application: {0}" --force --options runtime  ./target/release/bundle/osx/RustDesk.app/Contents/MacOS/*
     codesign -s "Developer ID Application: {0}" --force --options runtime  ./target/release/bundle/osx/RustDesk.app
     '''.format(pa))
+                # Force detach any lingering disk images to prevent "resource busy" errors in CI.
+                system2("hdiutil info | grep '/dev/disk' | awk '{print $1}' | xargs -I{} hdiutil detach -force {} || true")
+                system2('sleep 15')
                 system2(
                     'create-dmg "RustDesk %s.dmg" "target/release/bundle/osx/RustDesk.app"' % version)
                 os.rename('RustDesk %s.dmg' %
