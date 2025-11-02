@@ -183,7 +183,7 @@ jobs:
       if: matrix.job.variant == 'flutter'
       shell: bash
       run: |
-        cargo install flutter_rust_bridge_codegen --locked --force
+        cargo install flutter_rust_bridge_codegen --force
 
     - name: Generate Flutter bridge bindings
       if: matrix.job.variant == 'flutter'
@@ -227,15 +227,8 @@ jobs:
       if: matrix.job.variant == 'flutter'
       shell: bash
       run: |
-        VERSION=$(python3 - <<'PY'
-from pathlib import Path
-for line in Path("Cargo.toml").read_text().splitlines():
-    if line.startswith("version"):
-        print(line.split("=", 1)[1].strip().strip('"'))
-        break
-PY
-)
-        rm -f rustdesk-"${VERSION}".dmg
+        VERSION=$(grep '^version\s*=' Cargo.toml | head -n1 | awk -F\" '{print $2}')
+        rm -f rustdesk-"${VERSION}".dmg || true
         create-dmg --volname "RustDesk Installer" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app "rustdesk-${VERSION}.dmg" ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
     - name: Tag DMG with variant
