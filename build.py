@@ -559,10 +559,15 @@ def main():
         else:
             system2('cargo bundle --release --features ' + features)
             if osx:
-                system2(
-                    'strip target/release/bundle/osx/RustDesk.app/Contents/MacOS/rustdesk')
-                system2(
-                    'cp libsciter.dylib target/release/bundle/osx/RustDesk.app/Contents/MacOS/')
+                bundle_dir = Path('target/release/bundle/osx/RustDesk.app/Contents/MacOS')
+                primary_bin = bundle_dir / 'rustdesk'
+                alt_bin = bundle_dir / 'RustDesk'
+                target_bin = primary_bin if primary_bin.exists() else alt_bin
+                if target_bin.exists():
+                    system2(f'strip {target_bin}')
+                else:
+                    print(f'Warn: skip strip, binary not found in {bundle_dir}')
+                system2(f'cp libsciter.dylib {bundle_dir}/')
                 # https://github.com/sindresorhus/create-dmg
                 system2('/bin/rm -rf *.dmg')
                 pa = os.environ.get('P')
